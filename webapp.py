@@ -157,6 +157,10 @@ def publish():
     # 投稿実行
     try:
         if platform == "wantedly":
+            import traceback
+            print(f"[PUBLISH] 投稿開始: {article_name}, 画像{len(image_paths)}枚")
+            print(f"[PUBLISH] WANTEDLY_EMAIL: {config.WANTEDLY_EMAIL[:5]}...")
+            print(f"[PUBLISH] HEADLESS: {os.environ.get('HEADLESS', 'not set')}")
             success = publish_to_wantedly(
                 article_text,
                 image_paths,
@@ -169,6 +173,9 @@ def publish():
         elif platform == "note":
             flash("noteへの投稿機能は準備中です。")
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"[PUBLISH ERROR] {error_detail}")
         flash(f"エラーが発生しました: {e}")
 
     # 一時ファイル削除
