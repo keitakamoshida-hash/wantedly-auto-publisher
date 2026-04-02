@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プレビュー - Wantedly 記事自動投稿</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, 'Hiragino Sans', sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+        h1 { font-size: 1.3rem; margin-bottom: 1.5rem; }
+        .card { background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #555; }
+        .article-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; padding: 0.5rem; background: #f9f9f9; border-radius: 6px; }
+        .intro { color: #555; font-size: 0.9rem; margin-bottom: 0.5rem; padding: 0.5rem; background: #fafafa; border-radius: 4px; }
+        .section-list { list-style: none; }
+        .section-list li { padding: 0.5rem; border-left: 3px solid #4a90d9; margin-bottom: 0.5rem; background: #f8faff; }
+        .section-title { font-weight: 600; }
+        .section-question { color: #888; font-size: 0.85rem; font-style: italic; }
+
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .image-item { position: relative; border-radius: 8px; overflow: hidden; border: 3px solid transparent; cursor: pointer; transition: border-color 0.2s; }
+        .image-item img { width: 100%; height: 120px; object-fit: cover; display: block; }
+        .image-item .name { font-size: 0.7rem; padding: 0.3rem; text-align: center; background: #f5f5f5; }
+        .image-item.selected { border-color: #e91e63; }
+        .image-item .badge { position: absolute; top: 4px; right: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; color: #fff; font-weight: 700; background: #e91e63; }
+
+        .instructions { background: #fff8e1; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; }
+        .instructions strong { color: #f57f17; }
+
+        .closing { background: #f5f5f5; padding: 0.8rem; border-radius: 6px; font-size: 0.85rem; color: #666; margin-top: 0.5rem; }
+
+        .btn-group { display: flex; gap: 1rem; }
+        .btn { display: inline-block; padding: 0.8rem 2rem; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-back { background: #999; }
+        .btn-back:hover { background: #777; }
+        .btn-publish { background: #e91e63; flex: 1; }
+        .btn-publish:hover { background: #c2185b; }
+
+        .note { color: #888; font-size: 0.8rem; margin-top: 0.5rem; }
+
+        .platform-select { display: flex; gap: 1rem; }
+        .platform-option { flex: 1; display: block; padding: 1rem; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: border-color 0.2s; }
+        .platform-option:hover { border-color: #4a90d9; }
+        .platform-option.selected { border-color: #e91e63; background: #fce4ec; }
+        .platform-option input { display: none; }
+        .platform-name { display: block; font-weight: 700; font-size: 1.1rem; margin-bottom: 0.3rem; }
+        .platform-desc { color: #888; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>投稿プレビュー</h1>
+
+        <!-- 記事内容プレビュー -->
+        <div class="card">
+            <h2>記事内容</h2>
+            <div class="article-title">{{ title }}</div>
+            {% for line in intro %}
+            <div class="intro">{{ line }}</div>
+            {% endfor %}
+
+            <h2 style="margin-top: 1.5rem;">セクション（{{ sections|length }}つ）</h2>
+            <ul class="section-list">
+            {% for section in sections %}
+                <li>
+                    <div class="section-title">{{ section.heading }}</div>
+                    {% if section.paragraphs %}
+                    <div class="section-question">{{ section.paragraphs[0].text[:60] }}...</div>
+                    {% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+
+            {% if closing %}
+            <h2 style="margin-top: 1.5rem;">締め文</h2>
+            {% for line in closing %}
+            <div class="closing">{{ line[:100] }}...</div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- カバー画像選択 -->
+        <div class="card">
+            <h2>カバー画像を選択</h2>
+            <div class="instructions">
+                カバー画像にしたい写真を<strong>1枚だけ</strong>クリックしてください。<br>
+                残りの写真は自動的に本文のセクションに配置されます。
+            </div>
+
+            <div class="image-grid" id="imageGrid">
+                {% for name in image_names %}
+                <div class="image-item" data-name="{{ name }}" onclick="selectCover(this)">
+                    <img src="/preview_image/{{ session_id }}/{{ name }}" alt="{{ name }}">
+                    <div class="name">{{ name }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="note" id="selectionNote">カバー画像を選択してください</p>
+        </div>
+
+        <!-- 投稿先選択 -->
+        <div class="card">
+            <h2>投稿先</h2>
+            <div class="platform-select">
+                <label class="platform-option selected" id="opt-wantedly" onclick="selectPlatform('wantedly')">
+                    <input type="radio" name="platform_display" value="wantedly" checked>
+                    <span class="platform-name">Wantedly</span>
+                    <span class="platform-desc">ストーリーに下書き投稿</span>
+                </label>
+                <label class="platform-option" id="opt-note" onclick="selectPlatform('note')">
+                    <input type="radio" name="platform_display" value="note">
+                    <span class="platform-name">note</span>
+                    <span class="platform-desc">テキスト記事に下書き投稿（準備中）</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 投稿ボタン -->
+        <form id="publishForm" action="/publish" method="post">
+            <input type="hidden" name="session_id" value="{{ session_id }}">
+            <input type="hidden" name="article_name" value="{{ article_name }}">
+            <input type="hidden" name="cover_image" id="coverImageInput" value="">
+            <input type="hidden" name="platform" id="platformInput" value="wantedly">
+            {% for name in image_names %}
+            <input type="hidden" name="all_images" value="{{ name }}">
+            {% endfor %}
+
+            <div class="btn-group">
+                <a href="/" class="btn btn-back">戻る</a>
+                <button type="submit" class="btn btn-publish" onclick="return prepareSubmit()">下書き投稿する</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let coverImage = null;
+
+        function selectCover(el) {
+            const name = el.dataset.name;
+
+            // 既に選択されている場合は解除
+            if (coverImage === name) {
+                coverImage = null;
+                el.classList.remove('selected');
+                const badge = el.querySelector('.badge');
+                if (badge) badge.remove();
+                document.getElementById('selectionNote').textContent = 'カバー画像を選択してください';
+                return;
+            }
+
+            // 他の選択を解除
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.classList.remove('selected');
+                const badge = item.querySelector('.badge');
+                if (badge) badge.remove();
+            });
+
+            // 新しくカバーに設定
+            coverImage = name;
+            el.classList.add('selected');
+            el.innerHTML += '<span class="badge">COVER</span>';
+            document.getElementById('selectionNote').textContent = 'カバー画像: ' + name + '（他の写真は自動配置されます）';
+        }
+
+        let selectedPlatform = 'wantedly';
+
+        function selectPlatform(platform) {
+            selectedPlatform = platform;
+            document.getElementById('platformInput').value = platform;
+            document.querySelectorAll('.platform-option').forEach(el => el.classList.remove('selected'));
+            document.getElementById('opt-' + platform).classList.add('selected');
+        }
+
+        function prepareSubmit() {
+            if (!coverImage) {
+                alert('カバー画像を選択してください');
+                return false;
+            }
+
+            document.getElementById('coverImageInput').value = coverImage;
+
+            const platformName = selectedPlatform === 'wantedly' ? 'Wantedly' : 'note';
+            return confirm(platformName + ' に下書き投稿します。よろしいですか？');
+        }
+    </script>
+</body>
+</html>

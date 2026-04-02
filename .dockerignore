@@ -1,0 +1,7 @@
+browser_data/
+__pycache__/
+*.pyc
+.env
+input/
+output/
+.git/

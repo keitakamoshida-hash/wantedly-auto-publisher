@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: wantedly-auto-publisher
+    runtime: docker
+    plan: starter
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WANTEDLY_EMAIL
+        sync: false
+      - key: WANTEDLY_PASSWORD
+        sync: false
+      - key: HEADLESS
+        value: "true"
