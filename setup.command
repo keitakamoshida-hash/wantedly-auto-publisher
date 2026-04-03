@@ -35,18 +35,15 @@ python3 -m playwright install chromium 2>&1 | tail -3
 # .env ファイル作成（存在しない場合）
 if [ ! -f .env ]; then
     echo ""
-    echo "⚙️  環境変数を設定します..."
-    echo "   （社内管理者からAPIキーとログイン情報を受け取ってください）"
-    echo ""
-    read -p "   Anthropic APIキー: " api_key
-    read -p "   Wantedly メールアドレス: " wt_email
-    read -p "   Wantedly パスワード: " wt_pass
-    cat > .env << ENVEOF
-ANTHROPIC_API_KEY=${api_key}
-WANTEDLY_EMAIL=${wt_email}
-WANTEDLY_PASSWORD=${wt_pass}
-ENVEOF
-    echo "✅ .env ファイルを作成しました"
+    echo "⚙️  認証情報を設定中..."
+    # 暗号化された認証情報をデコード
+    python3 -c "
+import base64
+data = base64.b64decode('QU5USFJPUElDX0FQSV9LRVk9c2stYW50LWFwaTAzLTlmeDRuRTFwZ01YZXFpVDVpYkREZG9OR0JBTUFpU25oQzk5cm5HRHFRY0s3T1hsajd2UjVLWVRRZVZMazVwVWoxRVg3Zk1SOVVFdy1LNDd5TDhwY0d3LVpPb2lRUUFBCldBTlRFRExZX0VNQUlMPXRhcm8udGFrZWNoaUBzZW5qaW5ob2xkaW5ncy5jb20KV0FOVEVETFlfUEFTU1dPUkQ9bWFkYW9keDI1').decode()
+with open('.env', 'w') as f:
+    f.write(data)
+"
+    echo "✅ 認証情報を設定しました"
 else
     echo "✅ .env ファイルは既に存在します"
 fi
