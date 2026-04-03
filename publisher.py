@@ -321,10 +321,15 @@ def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = Non
     """
     title, intro_lines, toc_lines, sections, closing_lines = _parse_article(article_md)
     image_paths = image_paths or []
-    body_images = image_paths[1:] if len(image_paths) > 1 else []
+    cover_image = image_paths[0] if image_paths else None
 
+    # Claude Visionで写真の最適配置を決定
+    from photo_matcher import match_photos_to_sections
+    section_images = match_photos_to_sections(sections, image_paths, cover_image)
+
+    body_image_count = sum(1 for img in section_images if img is not None)
     print(f"  Wantedly に下書き投稿中: {title[:40]}...")
-    print(f"    セクション数: {len(sections)}, 本文画像: {len(body_images)}枚")
+    print(f"    セクション数: {len(sections)}, 本文画像: {body_image_count}枚")
 
     try:
         with sync_playwright() as pw:
@@ -384,9 +389,9 @@ def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = Non
                 body.press("Enter")
                 time.sleep(0.5)
 
-                # 画像挿入（空行にプラスボタンが出る）
-                if i < len(body_images):
-                    _insert_image_via_menu(page, body, body_images[i])
+                # 画像挿入（このセクションに割り当てられた画像がある場合）
+                if section_images[i] is not None:
+                    _insert_image_via_menu(page, body, section_images[i])
                     body.press("Enter")
                     time.sleep(0.5)
 
