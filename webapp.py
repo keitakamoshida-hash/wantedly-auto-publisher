@@ -176,7 +176,8 @@ def publish():
         import traceback
         error_detail = traceback.format_exc()
         print(f"[PUBLISH ERROR] {error_detail}")
-        flash(f"エラーが発生しました: {e}")
+        flash(f"エラー: {e}")
+        flash(f"詳細: {error_detail[-500:]}")
 
     # 一時ファイル削除
     shutil.rmtree(session_dir, ignore_errors=True)
