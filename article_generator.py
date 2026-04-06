@@ -21,7 +21,7 @@ def _load_prompt_template() -> str:
     return template_path.read_text(encoding="utf-8")
 
 
-def _build_prompt(draft_text: str, vol_number: str = "XX") -> str:
+def _build_prompt(draft_text: str, vol_number: str = "XX", interviewee_name: str = "XX") -> str:
     """テンプレートに原稿と参考記事を埋め込む"""
     template = _load_prompt_template()
     samples = _load_samples()
@@ -29,19 +29,20 @@ def _build_prompt(draft_text: str, vol_number: str = "XX") -> str:
         sample_articles=samples,
         draft_article=draft_text,
         vol_number=vol_number,
+        interviewee_name=interviewee_name,
     )
 
 
-def generate_article(draft_text: str, vol_number: str = "XX") -> str:
+def generate_article(draft_text: str, vol_number: str = "XX", interviewee_name: str = "XX") -> str:
     """記事原稿からWantedlyスタイルの記事（Markdown）を生成する"""
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-    prompt = _build_prompt(draft_text, vol_number)
+    prompt = _build_prompt(draft_text, vol_number, interviewee_name)
 
     print("  記事を成形中...")
 
     message = client.messages.create(
         model=config.CLAUDE_MODEL,
-        max_tokens=4096,
+        max_tokens=3000,
         messages=[{"role": "user", "content": prompt}],
     )
 

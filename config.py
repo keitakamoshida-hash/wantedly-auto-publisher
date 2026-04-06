@@ -13,6 +13,7 @@ PROMPTS_DIR = BASE_DIR / "prompts"
 BROWSER_DATA_DIR = BASE_DIR / "browser_data"
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 WANTEDLY_EMAIL = os.getenv("WANTEDLY_EMAIL", "")
 WANTEDLY_PASSWORD = os.getenv("WANTEDLY_PASSWORD", "")
 
