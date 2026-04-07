@@ -527,6 +527,24 @@ def publish_to_note(article_md: str, image_paths: Optional[list[Path]] = None, s
             page.goto("https://editor.note.com/new", timeout=60000)
             time.sleep(5)
 
+            # カバー画像をアップロード（1枚目の画像）
+            if cover_image and cover_image.exists():
+                try:
+                    page.locator('[aria-label="画像を追加"]').click()
+                    time.sleep(2)
+                    with page.expect_file_chooser() as fc_info:
+                        page.locator('button:has-text("画像をアップロード")').click()
+                    file_chooser = fc_info.value
+                    file_chooser.set_files(str(cover_image))
+                    time.sleep(5)
+                    # クロップモーダルの「保存」をクリック（モーダル内）
+                    modal = page.locator('.ReactModalPortal')
+                    modal.locator('button:has-text("保存")').click(force=True)
+                    time.sleep(3)
+                    print(f"    カバー画像: {cover_image.name}")
+                except Exception as e:
+                    print(f"    カバー画像エラー: {e}")
+
             # タイトル入力
             title_input = page.locator('[placeholder="記事タイトル"]')
             title_input.fill(title)
