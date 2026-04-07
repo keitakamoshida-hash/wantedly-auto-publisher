@@ -276,6 +276,13 @@ def publish_to_note_from_wantedly(article: dict) -> bool:
                 page.keyboard.type("Senjin Holdingsでは一緒に働く仲間を募集しています")
                 body.press("Enter")
                 time.sleep(0.5)
+                # 大見出しのコンテキストを抜けるために通常テキストを入力→削除
+                page.keyboard.type(" ")
+                time.sleep(0.3)
+                page.keyboard.press("Backspace")
+                time.sleep(0.5)
+                body.press("Enter")
+                time.sleep(0.5)
 
                 # 募集リンクを埋め込み
                 recruit_urls = [
