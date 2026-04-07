@@ -16,6 +16,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 WANTEDLY_EMAIL = os.getenv("WANTEDLY_EMAIL", "")
 WANTEDLY_PASSWORD = os.getenv("WANTEDLY_PASSWORD", "")
+NOTE_EMAIL = os.getenv("NOTE_EMAIL", "")
+NOTE_PASSWORD = os.getenv("NOTE_PASSWORD", "")
 
 CLAUDE_MODEL = "claude-sonnet-4-20250514"
 

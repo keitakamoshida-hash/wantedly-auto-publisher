@@ -97,129 +97,79 @@ def login_interactive():
 def _parse_article(article_text: str):
     """記事テキストをタイトル・導入文・目次・セクションに分解する
 
-    原稿の構造:
-      タイトル行
-      導入文（こんにちは〜）
-      導入文続き
-      目次
-      見出し1
-      見出し2
-      ...
-      見出し1（2回目 = セクション開始）
-      質問
-      回答...
-      見出し2（2回目 = セクション開始）
-      ...
+    Markdown形式の記事を解析する:
+      # タイトル
+      導入文
+      ## 目次
+      - 見出し1
+      - 見出し2
+      ## 見出し1
+      本文...
+      ## 見出し2
+      本文...
     """
     lines = article_text.strip().split("\n")
-    clean_lines = []
+
+    title = ""
+    intro_lines = []
+    toc_lines = []
+    sections = []
+    current_section = None
+    phase = "start"  # start -> intro -> toc -> body
+
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
+
+        # H1 = タイトル
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            title = stripped[2:].strip()
+            phase = "intro"
+            continue
+
+        # H2 = 目次 or セクション見出し
         if stripped.startswith("## "):
-            stripped = stripped[3:].strip()
-        elif stripped.startswith("# "):
-            stripped = stripped[2:].strip()
-        clean_lines.append(stripped)
+            heading = stripped[3:].strip()
+            if heading == "目次":
+                phase = "toc"
+                continue
+            else:
+                # セクション見出し
+                phase = "body"
+                if current_section:
+                    sections.append(current_section)
+                current_section = {"heading": heading, "paragraphs": []}
+                continue
 
-    # 1. タイトル = 最初の行
-    title = clean_lines[0]
-    rest = clean_lines[1:]
-
-    # 2. 「目次」の位置を探す
-    toc_idx = -1
-    for i, line in enumerate(rest):
-        if line == "目次":
-            toc_idx = i
-            break
-
-    # 3. 導入文 = タイトル後〜目次前
-    intro_lines = rest[:toc_idx] if toc_idx >= 0 else []
-
-    # 4. 目次項目を収集（目次の次の行から、同じテキストが2回目に出るまで）
-    toc_lines = []
-    if toc_idx >= 0:
-        after_toc = rest[toc_idx + 1:]
-        seen = set()
-        for line in after_toc:
-            if line in seen:
-                break  # 2回目に出現 = 本文開始
-            seen.add(line)
-            toc_lines.append(line)
-
-    # 5. 目次項目をセットにして、本文をセクション分割
-    toc_set = set(toc_lines)
-    sections = []
-    current_section = None
-    # 本文開始位置 = 目次項目の最初が2回目に現れる場所
-    body_start = False
-
-    for line in rest:
-        if line == "目次":
-            body_start = False
-            continue
-
-        # 目次項目が2回目に出たら本文開始
-        if not body_start and line in toc_set:
-            # 目次内の出現はスキップ
-            if line == toc_lines[0] and not body_start:
-                # 最初のtocアイテムかチェック
-                # 目次リスト内ならスキップ、本文ならセクション開始
-                if toc_lines and line == toc_lines[0]:
-                    # toc_linesを消費していく
-                    pass
-            continue
-
-    # やり直し: もっとシンプルに
-    # 全行を走査し、各行の出現回数をカウント
-    from collections import Counter
-    line_counts = Counter(clean_lines[1:])  # タイトル除く
-
-    # 2回出現する行 = 目次にもセクション見出しにもある = セクション見出し
-    heading_candidates = [l for l in toc_lines if line_counts.get(l, 0) >= 2]
-
-    sections = []
-    current_section = None
-    heading_set = set(heading_candidates)
-    found_headings = set()
-    past_intro = False
-
-    for line in rest:
-        if line == "目次":
-            past_intro = True
+        # 目次項目（- で始まる行）
+        if phase == "toc":
+            item = stripped.lstrip("- ").strip()
+            if item:
+                toc_lines.append(item)
             continue
 
         # 導入文
-        if not past_intro:
+        if phase == "intro":
+            intro_lines.append(stripped)
             continue
 
-        # セクション見出し（2回目の出現時にセクション開始）
-        if line in heading_set:
-            if line not in found_headings:
-                # 1回目 = 目次内 → スキップ
-                found_headings.add(line)
-                continue
-            else:
-                # 2回目 = セクション見出し
-                if current_section:
-                    sections.append(current_section)
-                current_section = {"heading": line, "paragraphs": []}
-                continue
-
         # セクション内のパラグラフ
-        if current_section is not None:
-            # 各セクションの最初のパラグラフは質問（blockquote）として扱う
-            is_first = len(current_section["paragraphs"]) == 0
-            has_question_mark = "？" in line or "?" in line
-            is_answer = "：" in line[:10]  # "名前：" パターンは回答
+        if phase == "body" and current_section is not None:
+            # **太字**で囲まれた行 = 質問候補
+            is_bold = stripped.startswith("**") and stripped.endswith("**")
+            # 各セクションの最初の太字質問のみquestionとする
+            has_question_already = any(p["type"] == "question" for p in current_section["paragraphs"])
 
-            if is_first and not is_answer:
-                current_section["paragraphs"].append({"type": "question", "text": line})
-            elif has_question_mark and not is_answer:
-                current_section["paragraphs"].append({"type": "question", "text": line})
+            if is_bold and not has_question_already:
+                # 最初の太字 = メイン質問（小見出し）
+                q_text = stripped.strip("*").strip()
+                current_section["paragraphs"].append({"type": "question", "text": q_text})
+            elif is_bold:
+                # 2つ目以降の太字 = 通常テキスト（太字のまま）
+                current_section["paragraphs"].append({"type": "text", "text": stripped})
             else:
-                current_section["paragraphs"].append({"type": "text", "text": line})
+                current_section["paragraphs"].append({"type": "text", "text": stripped})
 
     if current_section:
         sections.append(current_section)
@@ -304,7 +254,7 @@ def _paste_text(page, text):
     time.sleep(0.3)
 
 
-def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = None, recruitment_url: Optional[str] = None) -> bool:
+def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = None, recruitment_url: Optional[str] = None, schedule_datetime: Optional[str] = None) -> bool:
     """Wantedly ストーリーに下書き投稿する（写真付き）
 
     参考記事の構造:
@@ -443,6 +393,56 @@ def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = Non
 
             # 自動保存を待つ
             time.sleep(5)
+
+            # --- 投稿予約（指定されている場合） ---
+            if schedule_datetime:
+                print(f"    投稿予約設定中: {schedule_datetime}")
+                try:
+                    # 公開設定へボタンをクリック
+                    page.locator('button:has-text("公開設定へ")').click()
+                    time.sleep(5)
+
+                    # 「投稿を予約する」チェックボックスをクリック
+                    schedule_btn = page.locator('text=投稿を予約する').locator("..").locator("button[role='checkbox']")
+                    schedule_btn.scroll_into_view_if_needed()
+                    time.sleep(1)
+                    schedule_btn.click()
+                    time.sleep(3)
+
+                    # 日付を設定
+                    # schedule_datetime = "2026-04-10 12:00" 形式
+                    parts = schedule_datetime.split(" ")
+                    date_str = parts[0]  # "2026-04-10"
+                    time_parts = parts[1].split(":") if len(parts) > 1 else ["12", "00"]
+                    hour = time_parts[0]
+                    minute = time_parts[1] if len(time_parts) > 1 else "00"
+
+                    # 日付入力
+                    date_input = page.locator('input[type="date"]')
+                    date_input.fill(date_str)
+                    time.sleep(1)
+
+                    # 時間・分のドロップダウン
+                    selects = page.locator('select, [class*="DropDownSelect"]')
+                    select_count = selects.count()
+                    if select_count >= 2:
+                        # 時間
+                        selects.nth(0).select_option(hour)
+                        time.sleep(0.5)
+                        # 分
+                        selects.nth(1).select_option(minute)
+                        time.sleep(0.5)
+
+                    # 「投稿を予約」ボタンをクリック
+                    reserve_btn = page.locator('button:has-text("投稿を予約")')
+                    reserve_btn.click()
+                    time.sleep(3)
+
+                    print(f"    投稿予約完了: {schedule_datetime}")
+                except Exception as e:
+                    print(f"    投稿予約エラー: {e}")
+                    print("    下書きとして保存されています")
+
             context.close()
 
         print("  Wantedly 下書き投稿完了（自動保存）")
@@ -454,66 +454,169 @@ def publish_to_wantedly(article_md: str, image_paths: Optional[list[Path]] = Non
         return False
 
 
-def publish_to_note(article_md: str, image_paths: Optional[list[Path]] = None) -> bool:
-    """note に下書き投稿する（写真付き）"""
-    title, body = _extract_title_and_body(article_md)
+def _ensure_note_login(page):
+    """noteにログインしていなければ自動ログインする"""
+    page.goto("https://note.com/dashboard", timeout=60000)
+    time.sleep(5)
+
+    if "login" in page.url:
+        print("    note 自動ログイン中...")
+        email_input = page.locator('input[placeholder*="mail"]')
+        email_input.fill(config.NOTE_EMAIL)
+        time.sleep(0.5)
+
+        pass_input = page.locator('input[type="password"]')
+        pass_input.fill(config.NOTE_PASSWORD)
+        time.sleep(0.5)
+
+        page.locator('button:has-text("ログイン")').click()
+        time.sleep(8)
+
+        if "login" not in page.url:
+            print("    ログイン成功")
+        else:
+            print("    ログイン失敗")
+    else:
+        print("    note ログイン済み")
+
+
+def _note_insert_image(page, body, img_path: Path):
+    """noteエディタで画像を挿入する（メニュー→画像→file input）"""
+    try:
+        page.locator('[aria-label="メニューを開く"]').click()
+        time.sleep(1)
+        page.locator('button:has-text("画像")').click()
+        time.sleep(2)
+
+        file_input = page.locator('input[type="file"][accept*="image"]')
+        file_input.set_input_files(str(img_path))
+        print(f"    本文画像: {img_path.name}")
+        time.sleep(4)
+    except Exception as e:
+        print(f"    画像挿入エラー ({img_path.name}): {e}")
+
+
+def publish_to_note(article_md: str, image_paths: Optional[list[Path]] = None, schedule_datetime: Optional[str] = None) -> bool:
+    """note にテキスト記事を下書き投稿する（写真付き）
+
+    noteエディタの操作:
+      - "## テキスト" → H2見出しに自動変換
+      - "> テキスト" → Blockquoteに自動変換
+      - メニュー→画像 → file inputで画像挿入
+      - メニュー→目次 → 目次挿入
+    """
+    title, intro_lines, toc_lines, sections, closing_lines = _parse_article(article_md)
     image_paths = image_paths or []
-    print(f"  note に下書き投稿中: {title[:30]}...")
+    cover_image = image_paths[0] if image_paths else None
+
+    # Claude Visionで写真配置
+    from photo_matcher import match_photos_to_sections
+    section_images = match_photos_to_sections(sections, image_paths, cover_image)
+
+    print(f"  note に下書き投稿中: {title[:40]}...")
 
     try:
         with sync_playwright() as pw:
             context = _get_browser_context(pw)
             page = context.new_page()
 
-            # note 記事作成ページを開く
-            page.goto("https://note.com/notes/new", wait_until="networkidle")
-            time.sleep(2)
+            # ログイン確認
+            _ensure_note_login(page)
 
-            # カバー画像をアップロード
-            if image_paths:
-                try:
-                    cover_input = page.locator('input[type="file"]').first
-                    cover_input.set_input_files(str(image_paths[0]))
-                    print(f"    カバー画像: {image_paths[0].name}")
-                    time.sleep(3)
-                except Exception as e:
-                    print(f"    カバー画像アップロードエラー: {e}")
+            # 新規記事作成ページ
+            page.goto("https://editor.note.com/new", timeout=60000)
+            time.sleep(5)
 
             # タイトル入力
-            title_input = page.locator(
-                'textarea[placeholder*="タイトル"], '
-                'textarea[placeholder*="記事タイトル"], '
-                ".o-noteContentHeader__title textarea"
-            ).first
-            title_input.click()
+            title_input = page.locator('[placeholder="記事タイトル"]')
             title_input.fill(title)
+            print(f"    タイトル: {title[:50]}")
 
-            # 本文入力
-            body_input = page.locator(
-                '[contenteditable="true"], '
-                ".ProseMirror, "
-                ".o-noteContentBody__editor"
-            ).first
-            body_input.click()
-
-            for line in body.split("\n"):
-                if line.strip():
-                    body_input.type(line)
-                body_input.press("Enter")
-
+            # 本文エディタにフォーカス
+            body = page.locator('.ProseMirror[role="textbox"]')
+            body.click()
             time.sleep(1)
 
-            # 下書き保存（note は自動保存されるが念のため）
-            save_btn = page.locator(
-                'button:has-text("下書き保存"), '
-                'button:has-text("保存")'
-            ).first
-            try:
-                save_btn.click(timeout=3000)
-            except Exception:
-                pass  # 自動保存の場合はボタンがない
+            # --- 1. 導入文 ---
+            for line in intro_lines:
+                page.keyboard.type(line)
+                body.press("Enter")
+                time.sleep(0.3)
+            print("    導入文入力完了")
 
+            # --- 2. 目次を挿入（空行にカーソルがある状態で） ---
+            try:
+                page.locator('[aria-label="メニューを開く"]').click()
+                time.sleep(1)
+                page.locator('button:has-text("目次")').click()
+                time.sleep(2)
+                page.keyboard.press("ArrowDown")
+                body.press("Enter")
+                time.sleep(0.5)
+                print("    目次挿入完了")
+            except Exception as e:
+                print(f"    目次挿入エラー: {e}")
+
+            # --- 3. 各セクション ---
+            for i, section in enumerate(sections):
+                # H2見出し（メニューから「大見出し」を選択）
+                page.locator('[aria-label="メニューを開く"]').click()
+                time.sleep(1)
+                page.locator('button:has-text("大見出し")').click()
+                time.sleep(0.5)
+                page.keyboard.type(section["heading"])
+                body.press("Enter")
+                time.sleep(0.5)
+
+                # 画像挿入（割り当てられたセクションのみ）
+                if section_images[i] is not None:
+                    _note_insert_image(page, body, section_images[i])
+                    body.press("Enter")
+                    time.sleep(1)
+
+                # 質問・回答
+                for para in section["paragraphs"]:
+                    if para["type"] == "question":
+                        # 質問を小見出し（メニューから）で表示
+                        page.locator('[aria-label="メニューを開く"]').click()
+                        time.sleep(1)
+                        page.locator('button:has-text("小見出し")').click()
+                        time.sleep(0.5)
+                        page.keyboard.type(para["text"])
+                        body.press("Enter")
+                    else:
+                        page.keyboard.type(para["text"])
+                        body.press("Enter")
+                    time.sleep(0.1)
+
+                body.press("Enter")
+                time.sleep(0.3)
+
+            # --- 4. 締め文 ---
+            if closing_lines:
+                try:
+                    page.locator('[aria-label="メニューを開く"]').click()
+                    time.sleep(1)
+                    page.locator('button:has-text("区切り線")').click()
+                    time.sleep(1)
+                    body.press("Enter")
+                    time.sleep(0.5)
+                except Exception:
+                    pass
+
+                for line in closing_lines:
+                    page.keyboard.type(line)
+                    body.press("Enter")
+                    time.sleep(0.1)
+                print("    締め文入力完了")
+
+            print("    本文入力完了")
+
+            # 下書き保存
             time.sleep(2)
+            page.locator('button:has-text("下書き保存")').click()
+            time.sleep(3)
+
             context.close()
 
         print("  note 下書き投稿完了")
