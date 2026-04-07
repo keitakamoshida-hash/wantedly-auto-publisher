@@ -156,22 +156,33 @@ def publish():
 
     # 投稿実行
     try:
-        if platform == "wantedly":
+        results = []
+
+        if platform in ["wantedly", "both"]:
             import traceback
-            print(f"[PUBLISH] 投稿開始: {article_name}, 画像{len(image_paths)}枚")
-            print(f"[PUBLISH] WANTEDLY_EMAIL: {config.WANTEDLY_EMAIL[:5]}...")
-            print(f"[PUBLISH] HEADLESS: {os.environ.get('HEADLESS', 'not set')}")
+            print(f"[PUBLISH] Wantedly投稿開始: {article_name}, 画像{len(image_paths)}枚")
             success = publish_to_wantedly(
                 article_text,
                 image_paths,
                 recruitment_url=recruitment_url,
             )
             if success:
-                flash("Wantedlyに下書き投稿しました！管理画面で確認してください。")
-            else:
-                flash("投稿に失敗しました。output/の記事ファイルから手動で投稿してください。")
-        elif platform == "note":
-            flash("noteへの投稿機能は準備中です。")
+                results.append("Wantedly")
+
+        if platform in ["note", "both"]:
+            from publisher import publish_to_note
+            print(f"[PUBLISH] note投稿開始: {article_name}, 画像{len(image_paths)}枚")
+            success = publish_to_note(
+                article_text,
+                image_paths,
+            )
+            if success:
+                results.append("note")
+
+        if results:
+            flash(f"{'・'.join(results)}に下書き投稿しました！各管理画面で確認してください。")
+        else:
+            flash("投稿に失敗しました。output/の記事ファイルから手動で投稿してください。")
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
